@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CYBER-PULSE // Audio Spectrum Visualizer</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Three.js for 3D visuals -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700;800&family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+    
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #05070d;
+      color: #e2e8f0;
+    }
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .glass-card {
+      background: rgba(13, 19, 33, 0.75);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    }
+    .glow-border {
+      box-shadow: 0 0 20px -3px rgba(99, 102, 241, 0.25);
+    }
+    /* Custom Range Sliders */
+    input[type=range] {
+      -webkit-appearance: none;
+      background: #1e293b;
+      height: 6px;
+      border-radius: 3px;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      height: 16px;
+      width: 16px;
+      border-radius: 50%;
+      background: #6366f1;
+      cursor: pointer;
+      box-shadow: 0 0 10px #6366f1;
+      transition: all 0.15s ease;
+    }
+    input[type=range]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+    /* Scrollbar Styling */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #090d16;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between overflow-x-hidden selection:bg-indigo-500 selection:text-white">
+
+  <!-- Top Header Navigation -->
+  <header class="border-b border-slate-800/80 bg-slate-950/70 backdrop-blur-xl sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="p-2.5 bg-indigo-500/10 rounded-xl border border-indigo-500/30 text-indigo-400">
+          <i data-lucide="radio" class="w-6 h-6 animate-pulse"></i>
+        </div>
+        <div>
+          <h1 class="font-extrabold text-lg text-white tracking-wider flex items-center gap-2 font-mono">
+            CYBER-PULSE <span class="text-[10px] font-normal px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/40">AUDIO ENGINE 2.0</span>
+          </h1>
+          <p class="text-xs text-slate-400">Interactive Cybernetic Spectrum & 3D Audio Visualizer</p>
+        </div>
+      </div>
+      
+      <!-- Metrics Dashboard Header -->
+      <div class="flex items-center gap-3">
+        <div id="audioStatusBadge" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono text-slate-400">
+          <span class="w-2 h-2 rounded-full bg-slate-600"></span> ENGINE: OFF
+        </div>
+        <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono text-indigo-400">
+          <i data-lucide="zap" class="w-3.5 h-3.5"></i> <span id="fpsMeter">FPS: 60</span>
+        </div>
+        <div class="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono text-emerald-400">
+          <i data-lucide="volume-2" class="w-3.5 h-3.5"></i> <span id="dbMeter">PEAK: -inf dB</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Grid Workspace -->
+  <main class="max-w-7xl mx-auto px-4 py-6 w-full flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- Left Controls Dashboard (5 Cols) -->
+    <section class="lg:col-span-5 flex flex-col gap-5">
+
+      <!-- Audio Input & Synth Generator Engine -->
+      <div class="glass-card rounded-2xl p-5 glow-border">
+        <h2 class="text-sm font-semibold text-slate-200 mb-4 flex items-center gap-2 font-mono">
+          <i data-lucide="sliders-horizontal" class="w-4 h-4 text-indigo-400"></i> AUDIO SOURCE SELECTION
+        </h2>
+
+        <div class="flex flex-col gap-3">
+          <button id="toggleEngineBtn" class="w-full py-3.5 px-4 rounded-xl font-bold text-sm bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-lg shadow-indigo-600/30 transition-all transform active:scale-98 flex items-center justify-center gap-2">
+            <i data-lucide="power" class="w-4 h-4"></i> Activate Audio Engine
+          </button>
+
+          <!-- Audio Source Select Tabs -->
+          <div class="grid grid-cols-3 gap-2 text-xs pt-1">
+            <button id="srcSynth" class="src-btn py-2 px-2 rounded-lg bg-indigo-600/30 border border-indigo-500/50 text-indigo-200 font-medium text-center">
+              Built-in Synth
+            </button>
+            <button id="srcMic" class="src-btn py-2 px-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-400 font-medium text-center">
+              Microphone
+            </button>
+            <button id="srcSys" class="src-btn py-2 px-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-400 font-medium text-center">
+              System Audio
+            </button>
+          </div>
+
+          <!-- Built-in Synth Controls (Visible when Synth selected) -->
+          <div id="synthControlsBlock" class="mt-2 p-3 bg-slate-950/80 rounded-xl border border-slate-800/80 flex flex-col gap-2">
+            <div class="flex justify-between items-center text-xs">
+              <span class="text-slate-400 font-mono">Synth Generator Preset</span>
+              <span id="synthPatternLabel" class="text-indigo-400 font-mono">Cyber Melody</span>
+            </div>
+            <div class="grid grid-cols-4 gap-1.5 text-[11px] font-mono">
+              <button data-synth="melody" class="synth-preset-btn py-1.5 px-2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">Melody</button>
+              <button data-synth="chords" class="synth-preset-btn py-1.5 px-2 rounded bg-slate-900 text-slate-400 border border-slate-800">Chords</button>
+              <button data-synth="sweep" class="synth-preset-btn py-1.5 px-2 rounded bg-slate-900 text-slate-400 border border-slate-800">Sweep</button>
+              <button data-synth="bass" class="synth-preset-btn py-1.5 px-2 rounded bg-slate-900 text-slate-400 border border-slate-800">CyberBass</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Display Mode & Color Theme Controls -->
+      <div class="glass-card rounded-2xl p-5 glow-border flex flex-col gap-4">
+        <h2 class="text-sm font-semibold text-slate-200 flex items-center gap-2 font-mono">
+          <i data-lucide="palette" class="w-4 h-4 text-indigo-400"></i> VISUALIZATION MODES & THEMES
+        </h2>
+
+        <!-- View Modes -->
+        <div>
+          <label class="block text-xs text-slate-400 mb-2">Display Mode</label>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <button data-mode="2d_grid" class="view-mode-btn py-2 px-3 rounded-lg border border-indigo-500/80 bg-indigo-500/10 text-white font-medium flex items-center justify-between">
+              2D Matrix Grid <i data-lucide="grid" class="w-3.5 h-3.5"></i>
+            </button>
+            <button data-mode="3d_grid" class="view-mode-btn py-2 px-3 rounded-lg border border-slate-800 bg-slate-900/60 text-slate-400 font-medium flex items-center justify-between">
+              3D Hologram Grid <i data-lucide="box" class="w-3.5 h-3.5"></i>
+            </button>
+            <button data-mode="bars" class="view-mode-btn py-2 px-3 rounded-lg border border-slate-800 bg-slate-900/60 text-slate-400 font-medium flex items-center justify-between">
+              Floating Spectrum <i data-lucide="bar-chart-2" class="w-3.5 h-3.5"></i>
+            </button>
+            <button data-mode="radial" class="view-mode-btn py-2 px-3 rounded-lg border border-slate-800 bg-slate-900/60 text-slate-400 font-medium flex items-center justify-between">
+              Radial Burst <i data-lucide="disc" class="w-3.5 h-3.5"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Color Themes Selector -->
+        <div>
+          <label class="block text-xs text-slate-400 mb-2">Color Palette Theme</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button data-theme="thermal" class="theme-btn py-2 px-3 rounded-lg border border-indigo-500/80 bg-indigo-500/10 text-white text-xs font-semibold flex items-center justify-between">
+              Thermal Hot <span class="w-3 h-3 rounded-full bg-gradient-to-r from-emerald-400 via-amber-400 to-red-500"></span>
+            </button>
+            <button data-theme="cyberpunk" class="theme-btn py-2 px-3 rounded-lg border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white text-xs font-semibold flex items-center justify-between">
+              Cyber Neon <span class="w-3 h-3 rounded-full bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-600"></span>
+            </button>
+            <button data-theme="vaporwave" class="theme-btn py-2 px-3 rounded-lg border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white text-xs font-semibold flex items-center justify-between">
+              Vaporwave <span class="w-3 h-3 rounded-full bg-gradient-to-r from-cyan-400 via-pink-400 to-purple-600"></span>
+            </button>
+            <button data-theme="matrix" class="theme-btn py-2 px-3 rounded-lg border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white text-xs font-semibold flex items-center justify-between">
+              Matrix Cyber <span class="w-3 h-3 rounded-full bg-gradient-to-r from-emerald-600 via-emerald-400 to-lime-200"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DSP & Dynamic Scaling Sliders -->
+      <div class="glass-card rounded-2xl p-5 glow-border flex flex-col gap-4">
+        <h2 class="text-sm font-semibold text-slate-200 flex items-center gap-2 font-mono">
+          <i data-lucide="cpu" class="w-4 h-4 text-indigo-400"></i> DSP SIGNAL DYNAMICS
+        </h2>
+
+        <div>
+          <div class="flex justify-between text-xs mb-1 font-mono">
+            <span class="text-slate-400">Gain Sensitivity</span>
+            <span id="gainVal" class="text-indigo-400">2.5x</span>
+          </div>
+          <input type="range" id="gainSlider" min="0.5" max="5.0" step="0.1" value="2.5" class="w-full">
+        </div>
+
+        <div>
+          <div class="flex justify-between text-xs mb-1 font-mono">
+            <span class="text-slate-400">FFT Response Smoothing</span>
+            <span id="smoothVal" class="text-indigo-400">0.75</span>
+          </div>
+          <input type="range" id="smoothSlider" min="0.1" max="0.95" step="0.05" value="0.75" class="w-full">
+        </div>
+
+        <div>
+          <div class="flex justify-between text-xs mb-1 font-mono">
+            <span class="text-slate-400">Peak Decay Fall Speed</span>
+            <span id="decayVal" class="text-indigo-400">Medium</span>
+          </div>
+          <input type="range" id="decaySlider" min="1" max="5" step="1" value="3" class="w-full">
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Right Interactive Display Area (7 Cols) -->
+    <section class="lg:col-span-7 flex flex-col gap-5">
+
+      <!-- Main Visualizer Display Container -->
+      <div class="glass-card rounded-2xl p-6 glow-border flex flex-col items-center relative overflow-hidden min-h-[460px]">
+        
+        <div class="w-full flex justify-between items-center mb-4 z-10">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <h3 class="text-sm font-semibold text-slate-200 font-mono tracking-wider">SPECTRUM MATRIX VIEWPORT</h3>
+          </div>
+          <div class="text-[11px] font-mono text-slate-400 flex items-center gap-3">
+            <span>TOUCH/CLICK PADS FOR SYNTH BURST</span>
+          </div>
+        </div>
+
+        <!-- 2D Pad Grid Container -->
+        <div id="grid2DWrapper" class="relative w-full max-w-[440px] aspect-square flex flex-col justify-between my-auto transition-opacity duration-300">
+          <div id="padMatrixGrid" class="grid grid-cols-8 gap-2.5 w-full h-full">
+            <!-- 64 Pads dynamically populated via JavaScript -->
+          </div>
+        </div>
+
+        <!-- 3D Three.js Visualizer Canvas Container -->
+        <div id="threeCanvasWrapper" class="absolute inset-0 w-full h-full hidden opacity-0 transition-opacity duration-300">
+          <div id="threeContainer" class="w-full h-full"></div>
+        </div>
+
+        <!-- 2D Canvas for Radial & Bar Modes -->
+        <div id="canvas2DWrapper" class="absolute inset-0 w-full h-full hidden opacity-0 transition-opacity duration-300">
+          <canvas id="customCanvas2D" class="w-full h-full"></canvas>
+        </div>
+
+        <!-- Frequency Bin Labels (Bottom Overlay) -->
+        <div class="grid grid-cols-8 gap-2.5 w-full max-w-[440px] mt-4 text-center text-[10px] font-mono text-slate-400 z-10">
+          <div>SUB</div>
+          <div>BASS</div>
+          <div>LOW</div>
+          <div>MID</div>
+          <div>HMID</div>
+          <div>PRES</div>
+          <div>HIGH</div>
+          <div>AIR</div>
+        </div>
+      </div>
+
+      <!-- Live Oscilloscope & FFT Waveform Monitor -->
+      <div class="glass-card rounded-2xl p-5 glow-border">
+        <h3 class="text-xs font-semibold text-slate-300 mb-3 flex items-center gap-2 font-mono">
+          <i data-lucide="activity" class="w-4 h-4 text-indigo-400"></i> RAW OSCILLOSCOPE SIGNAL WAVEFORM
+        </h3>
+        <div class="w-full h-24 bg-slate-950/90 rounded-xl border border-slate-800/80 overflow-hidden relative">
+          <canvas id="oscilloscopeCanvas" class="w-full h-full"></canvas>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-800/80 bg-slate-950 py-3">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center text-xs text-slate-500 gap-2 font-mono">
+      <p>CYBER-PULSE Web Audio Spectrum Visualizer</p>
+      <p class="text-[11px]">Web Audio API • Three.js 3D Engine • Canvas2D</p>
+    </div>
+  </footer>
+
+  <!-- Application Logic JavaScript -->
+  <script>
+    // Initialize Lucide Icons
+    lucide.createIcons();
+
+    // ------------------------------------------------------------------
+    // State & Global Variables
+    // ------------------------------------------------------------------
+    let audioCtx = null;
+    let analyser = null;
+    let masterGainNode = null;
+    let isEngineActive = false;
+    let activeSourceType = 'synth'; // 'synth', 'mic', 'sys'
+
+    // Synth Preset State
+    let synthInterval = null;
+    let currentSynthPreset = 'melody';
+
+    // DSP Dynamics Variables
+    let gainFactor = 2.5;
+    let smoothingConstant = 0.75;
+    let decaySpeed = 3;
+    let activeTheme = 'thermal';
+    let activeViewMode = '2d_grid';
+
+    // FFT & Spectrum Data
+    const gridHeights = new Array(8).fill(0);
+    const gridPeaks = new Array(8).fill(0);
+
+    // Color Theme Palettes (RGB Values)
+    const THEMES = {
+      thermal: [
+        { r: 16, g: 185, b: 129 }, // Green
+        { r: 34, g: 197, b: 94 },
+        { r: 132, g: 204, b: 22 },
+        { r: 234, g: 179, b: 8 },  // Yellow
+        { r: 249, g: 115, b: 22 }, // Orange
+        { r: 239, g: 68, b: 68 },  // Red
+        { r: 220, g: 38, b: 38 },
+        { r: 255, g: 0, b: 90 }    // Hot Peak
+      ],
+      cyberpunk: [
+        { r: 250, g: 204, b: 21 },
+        { r: 245, g: 158, b: 11 },
+        { r: 249, g: 115, b: 22 },
+        { r: 239, g: 68, b: 68 },
+        { r: 217, g: 70, b: 239 },
+        { r: 225, g: 29, b: 72 },
+        { r: 255, g: 0, b: 128 },
+        { r: 255, g: 255, b: 0 }
+      ],
+      vaporwave: [
+        { r: 6, g: 182, b: 212 },
+        { r: 59, g: 130, b: 246 },
+        { r: 99, g: 102, b: 241 },
+        { r: 139, g: 92, b: 246 },
+        { r: 168, g: 85, b: 247 },
+        { r: 217, g: 70, b: 239 },
+        { r: 236, g: 72, b: 153 },
+        { r: 244, g: 114, b: 182 }
+      ],
+      matrix: [
+        { r: 5, g: 46, b: 22 },
+        { r: 20, g: 83, b: 45 },
+        { r: 22, g: 101, b: 52 },
+        { r: 34, g: 197, b: 94 },
+        { r: 74, g: 222, b: 128 },
+        { r: 134, g: 239, b: 172 },
+        { r: 187, g: 247, b: 208 },
+        { r: 255, g: 255, b: 255 }
+      ]
+    };
+
+    // DOM Elements
+    const toggleEngineBtn = document.getElementById('toggleEngineBtn');
+    const audioStatusBadge = document.getElementById('audioStatusBadge');
+    const fpsMeter = document.getElementById('fpsMeter');
+    const dbMeter = document.getElementById('dbMeter');
+    const gainSlider = document.getElementById('gainSlider');
+    const gainVal = document.getElementById('gainVal');
+    const smoothSlider = document.getElementById('smoothSlider');
+    const smoothVal = document.getElementById('smoothVal');
+    const decaySlider = document.getElementById('decaySlider');
+    const decayVal = document.getElementById('decayVal');
+
+    const grid2DWrapper = document.getElementById('grid2DWrapper');
+    const threeCanvasWrapper = document.getElementById('threeCanvasWrapper');
+    const canvas2DWrapper = document.getElementById('canvas2DWrapper');
+    const padMatrixGrid = document.getElementById('padMatrixGrid');
+    const customCanvas2D = document.getElementById('customCanvas2D');
+    const ctx2D = customCanvas2D.getContext('2d');
+
+    const oscilloscopeCanvas = document.getElementById('oscilloscopeCanvas');
+    const oscCtx = oscilloscopeCanvas.getContext('2d');
+
+    // ------------------------------------------------------------------
+    // Build 8x8 Virtual Pad Matrix UI
+    // ------------------------------------------------------------------
+    const padElements = [];
+    function initPadMatrix() {
+      padMatrixGrid.innerHTML = '';
+      for (let r = 7; r >= 0; r--) {
+        for (let c = 0; c < 8; c++) {
+          const pad = document.createElement('div');
+          pad.className = 'w-full h-full rounded-xl bg-slate-900/90 border border-slate-800 pad-glow flex items-center justify-center cursor-pointer transition-all transform hover:scale-105 active:scale-95';
+          pad.dataset.row = r;
+          pad.dataset.col = c;
+          
+          // Pad Click/Touch Interactive Sound Trigger
+          pad.addEventListener('mousedown', () => triggerPadSound(r, c));
+          pad.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            triggerPadSound(r, c);
+          });
+
+          padMatrixGrid.appendChild(pad);
+          padElements.push({ element: pad, row: r, col: c });
+        }
+      }
+    }
+    initPadMatrix();
+
+    // ------------------------------------------------------------------
+    // Web Audio Engine Initialization
+    // ------------------------------------------------------------------
+    async function initAudioEngine() {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 512;
+        analyser.smoothingTimeConstant = smoothingConstant;
+
+        masterGainNode = audioCtx.createGain();
+        masterGainNode.gain.value = 0.5;
+        masterGainNode.connect(analyser);
+      }
+
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+      }
+
+      isEngineActive = true;
+      audioStatusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> ENGINE: ACTIVE`;
+      audioStatusBadge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-xs font-mono text-emerald-300';
+      toggleEngineBtn.innerHTML = `<i data-lucide="square" class="w-4 h-4"></i> Stop Audio Engine`;
+      toggleEngineBtn.className = 'w-full py-3.5 px-4 rounded-xl font-bold text-sm bg-rose-600 hover:bg-rose-500 text-white shadow-lg transition-all flex items-center justify-center gap-2';
+      lucide.createIcons();
+
+      // Start Audio Source Stream
+      activateSource(activeSourceType);
+
+      // Start Rendering Loop
+      renderLoop();
+    }
+
+    function stopAudioEngine() {
+      if (synthInterval) clearInterval(synthInterval);
+      if (audioCtx) audioCtx.suspend();
+
+      isEngineActive = false;
+      audioStatusBadge.innerHTML = `<span class="w-2 h-2 rounded-full bg-slate-600"></span> ENGINE: OFF`;
+      audioStatusBadge.className = 'flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs font-mono text-slate-400';
+      toggleEngineBtn.innerHTML = `<i data-lucide="power" class="w-4 h-4"></i> Activate Audio Engine`;
+      toggleEngineBtn.className = 'w-full py-3.5 px-4 rounded-xl font-bold text-sm bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white shadow-lg shadow-indigo-600/30 transition-all flex items-center justify-center gap-2';
+      lucide.createIcons();
+    }
+
+    // Switch Audio Sources (Synth / Microphone / System Audio)
+    async function activateSource(type) {
+      activeSourceType = type;
+      if (synthInterval) clearInterval(synthInterval);
+
+      if (type === 'synth') {
+        masterGainNode.connect(audioCtx.destination); // Send synth audio to speakers
+        startSynthSequence(currentSynthPreset);
+      } else if (type === 'mic') {
+        try {
+          masterGainNode.disconnect(); // Prevent feedback loop on mic
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const micSource = audioCtx.createMediaStreamSource(stream);
+          micSource.connect(analyser);
+        } catch (e) {
+          alert("Microphone permission denied.");
+        }
+      } else if (type === 'sys') {
+        try {
+          masterGainNode.disconnect();
+          const sysStream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: true });
+          const sysSource = audioCtx.createMediaStreamSource(sysStream);
+          sysSource.connect(analyser);
+        } catch (e) {
+          console.log("System audio capture cancelled.");
+        }
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // Built-in Synthesizer & Sound Generator Engine
+    // ------------------------------------------------------------------
+    const MELODY_NOTES = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25];
+    
+    function playSynthNote(freq, type = 'sawtooth', duration = 0.25) {
+      if (!audioCtx || !isEngineActive) return;
+
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+
+      gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+
+      osc.connect(gain);
+      gain.connect(masterGainNode);
+
+      osc.start();
+      osc.stop(audioCtx.currentTime + duration);
+    }
+
+    function triggerPadSound(row, col) {
+      if (!isEngineActive) {
+        initAudioEngine();
+      }
+      const baseFreq = 130.81; // C3
+      const freq = baseFreq * Math.pow(2, (row * 8 + col) / 12);
+      playSynthNote(freq, 'triangle', 0.4);
+
+      // Create a visual ripple glow effect on neighboring pads
+      padElements.forEach(pad => {
+        const dist = Math.hypot(pad.row - row, pad.col - col);
+        if (dist <= 2) {
+          setTimeout(() => {
+            pad.element.style.transform = 'scale(1.15)';
+            setTimeout(() => pad.element.style.transform = 'scale(1)', 150);
+          }, dist * 40);
+        }
+      });
+    }
+
+    function startSynthSequence(preset) {
+      currentSynthPreset = preset;
+      if (synthInterval) clearInterval(synthInterval);
+
+      let step = 0;
+      synthInterval = setInterval(() => {
+        if (!isEngineActive) return;
+
+        if (preset === 'melody') {
+          const freq = MELODY_NOTES[Math.floor(Math.random() * MELODY_NOTES.length)];
+          playSynthNote(freq, 'square', 0.2);
+        } else if (preset === 'chords') {
+          const root = MELODY_NOTES[step % 4];
+          playSynthNote(root, 'sawtooth', 0.4);
+          playSynthNote(root * 1.25, 'sawtooth', 0.4);
+          playSynthNote(root * 1.5, 'sawtooth', 0.4);
+        } else if (preset === 'sweep') {
+          const freq = 100 + (step % 16) * 60;
+          playSynthNote(freq, 'sine', 0.15);
+        } else if (preset === 'bass') {
+          const bassNotes = [65.41, 73.42, 82.41, 98.00];
+          playSynthNote(bassNotes[step % 4], 'sawtooth', 0.3);
+        }
+        step++;
+      }, 160);
+    }
+
+    // ------------------------------------------------------------------
+    // Three.js 3D Visualizer Setup
+    // ------------------------------------------------------------------
+    let scene, camera, renderer, cubeGrid = [];
+    function initThreeJS() {
+      const container = document.getElementById('threeContainer');
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
+      camera.position.set(0, 12, 16);
+      camera.lookAt(0, 0, 0);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      container.appendChild(renderer.domElement);
+
+      // Create 8x8 3D Grid Cubes
+      const geometry = new THREE.BoxGeometry(0.9, 0.9, 0.9);
+      for (let r = 0; r < 8; r++) {
+        cubeGrid[r] = [];
+        for (let c = 0; c < 8; c++) {
+          const material = new THREE.MeshPhongMaterial({
+            color: 0x6366f1,
+            emissive: 0x1e1b4b,
+            shininess: 100,
+            wireframe: false
+          });
+          const cube = new THREE.Mesh(geometry, material);
+          cube.position.set(c - 3.5, 0, r - 3.5);
+          scene.add(cube);
+          cubeGrid[r][c] = cube;
+        }
+      }
+
+      // Add Lighting
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+      scene.add(ambientLight);
+
+      const pointLight = new THREE.PointLight(0x6366f1, 2, 50);
+      pointLight.position.set(0, 10, 10);
+      scene.add(pointLight);
+
+      // Mouse drag rotation controls for 3D camera
+      let isDragging = false, prevMouseX = 0, prevMouseY = 0;
+      renderer.domElement.addEventListener('mousedown', (e) => {
+        isDragging = true;
+        prevMouseX = e.clientX;
+        prevMouseY = e.clientY;
+      });
+      window.addEventListener('mouseup', () => isDragging = false);
+      window.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const deltaX = e.clientX - prevMouseX;
+        const deltaY = e.clientY - prevMouseY;
+        scene.rotation.y += deltaX * 0.005;
+        scene.rotation.x += deltaY * 0.005;
+        prevMouseX = e.clientX;
+        prevMouseY = e.clientY;
+      });
+    }
+    initThreeJS();
+
+    // ------------------------------------------------------------------
+    // Main DSP Render Loop
+    // ------------------------------------------------------------------
+    let lastFrameTime = performance.now();
+
+    function renderLoop() {
+      if (!isEngineActive) return;
+
+      const now = performance.now();
+      const delta = now - lastFrameTime;
+      lastFrameTime = now;
+      fpsMeter.innerText = `FPS: ${Math.round(1000 / delta)}`;
+
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      const timeDataArray = new Uint8Array(bufferLength);
+      analyser.getByteFrequencyData(dataArray);
+      analyser.getByteTimeDomainData(timeDataArray);
+
+      // Render Oscilloscope Line
+      renderOscilloscope(timeDataArray);
+
+      // Calculate Peak dB Level
+      let maxVal = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        if (dataArray[i] > maxVal) maxVal = dataArray[i];
+      }
+      const db = maxVal > 0 ? Math.round(20 * Math.log10(maxVal / 255)) : -100;
+      dbMeter.innerText = `PEAK: ${db} dB`;
+
+      // Split Spectrum into 8 Logarithmic Frequency Columns
+      const binSize = Math.floor(bufferLength / 16);
+      for (let col = 0; col < 8; col++) {
+        let sum = 0;
+        const startBin = col * binSize;
+        const endBin = startBin + binSize;
+        for (let i = startBin; i < endBin; i++) {
+          sum += dataArray[i];
+        }
+
+        const avg = (sum / binSize) / 255.0;
+        const scaledHeight = Math.min(8, Math.max(0, Math.floor(avg * 8 * gainFactor)));
+
+        // Decay physics
+        if (scaledHeight >= gridPeaks[col]) {
+          gridPeaks[col] = scaledHeight;
+        } else {
+          gridPeaks[col] = Math.max(0, gridPeaks[col] - (0.08 * decaySpeed));
+        }
+
+        gridHeights[col] = scaledHeight;
+      }
+
+      // Render Active Visualization Mode
+      if (activeViewMode === '2d_grid') {
+        render2DGrid();
+      } else if (activeViewMode === '3d_grid') {
+        render3DGrid();
+      } else if (activeViewMode === 'bars' || activeViewMode === 'radial') {
+        render2DCanvasModes(dataArray);
+      }
+
+      requestAnimationFrame(renderLoop);
+    }
+
+    // Render 2D Grid Mode
+    function render2DGrid() {
+      const palette = THEMES[activeTheme];
+      padElements.forEach(pad => {
+        const r = pad.row;
+        const c = pad.col;
+        const height = gridHeights[c];
+        const peakHeight = Math.floor(gridPeaks[c]);
+
+        let color = { r: 15, g: 23, b: 42 };
+        let isLit = false;
+
+        if (r < height) {
+          color = palette[r];
+          isLit = true;
+        } else if (r === peakHeight && peakHeight > 0) {
+          color = palette[7];
+          isLit = true;
+        }
+
+        if (isLit) {
+          pad.element.style.backgroundColor = `rgb(${color.r}, ${color.g}, ${color.b})`;
+          pad.element.style.boxShadow = `0 0 14px rgba(${color.r}, ${color.g}, ${color.b}, 0.75)`;
+          pad.element.style.borderColor = `rgba(${color.r}, ${color.g}, ${color.b}, 0.9)`;
+        } else {
+          pad.element.style.backgroundColor = '#0f172a';
+          pad.element.style.boxShadow = 'none';
+          pad.element.style.borderColor = '#1e293b';
+        }
+      });
+    }
+
+    // Render 3D Grid Mode
+    function render3DGrid() {
+      const palette = THEMES[activeTheme];
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const cube = cubeGrid[r][c];
+          const height = gridHeights[c];
+          
+          if (r < height) {
+            const rgb = palette[r];
+            cube.scale.y = THREE.MathUtils.lerp(cube.scale.y, (r + 1) * 0.6, 0.2);
+            cube.material.color.setRGB(rgb.r / 255, rgb.g / 255, rgb.b / 255);
+            cube.material.emissive.setRGB(rgb.r / 500, rgb.g / 500, rgb.b / 500);
+          } else {
+            cube.scale.y = THREE.MathUtils.lerp(cube.scale.y, 0.2, 0.2);
+            cube.material.color.setHex(0x1e293b);
+            cube.material.emissive.setHex(0x090d16);
+          }
+        }
+      }
+      renderer.render(scene, camera);
+    }
+
+    // Render 2D Canvas Bar & Radial Modes
+    function render2DCanvasModes(dataArray) {
+      const width = customCanvas2D.width = customCanvas2D.clientWidth;
+      const height = customCanvas2D.height = customCanvas2D.clientHeight;
+      const palette = THEMES[activeTheme];
+
+      ctx2D.fillStyle = '#05070d';
+      ctx2D.fillRect(0, 0, width, height);
+
+      if (activeViewMode === 'bars') {
+        const barWidth = (width / 32) - 4;
+        for (let i = 0; i < 32; i++) {
+          const val = (dataArray[i * 2] / 255) * height * (gainFactor * 0.6);
+          const themeIdx = Math.min(7, Math.floor((val / height) * 8));
+          const color = palette[themeIdx];
+
+          ctx2D.fillStyle = `rgb(${color.r}, ${color.g}, ${color.b})`;
+          ctx2D.shadowBlur = 12;
+          ctx2D.shadowColor = `rgb(${color.r}, ${color.g}, ${color.b})`;
+          ctx2D.fillRect(i * (barWidth + 4) + 10, height - val, barWidth, val);
+        }
+      } else if (activeViewMode === 'radial') {
+        const centerX = width / 2;
+        const centerY = height / 2;
+        const radius = 60;
+
+        ctx2D.lineWidth = 3;
+        for (let i = 0; i < 64; i++) {
+          const angle = (i / 64) * Math.PI * 2;
+          const val = (dataArray[i] / 255) * 80 * (gainFactor * 0.5);
+          const themeIdx = Math.min(7, Math.floor((dataArray[i] / 255) * 8));
+          const color = palette[themeIdx];
+
+          const x1 = centerX + Math.cos(angle) * radius;
+          const y1 = centerY + Math.sin(angle) * radius;
+          const x2 = centerX + Math.cos(angle) * (radius + val);
+          const y2 = centerY + Math.sin(angle) * (radius + val);
+
+          ctx2D.strokeStyle = `rgb(${color.r}, ${color.g}, ${color.b})`;
+          ctx2D.shadowBlur = 10;
+          ctx2D.shadowColor = `rgb(${color.r}, ${color.g}, ${color.b})`;
+          ctx2D.beginPath();
+          ctx2D.moveTo(x1, y1);
+          ctx2D.lineTo(x2, y2);
+          ctx2D.stroke();
+        }
+      }
+    }
+
+    // Render Raw Oscilloscope
+    function renderOscilloscope(dataArray) {
+      const width = oscilloscopeCanvas.width = oscilloscopeCanvas.clientWidth;
+      const height = oscilloscopeCanvas.height = oscilloscopeCanvas.clientHeight;
+
+      oscCtx.fillStyle = '#020617';
+      oscCtx.fillRect(0, 0, width, height);
+      oscCtx.lineWidth = 2;
+      oscCtx.strokeStyle = '#6366f1';
+      oscCtx.shadowBlur = 8;
+      oscCtx.shadowColor = '#6366f1';
+      oscCtx.beginPath();
+
+      const sliceWidth = width / dataArray.length;
+      let x = 0;
+      for (let i = 0; i < dataArray.length; i++) {
+        const v = dataArray[i] / 128.0;
+        const y = (v * height) / 2;
+        if (i === 0) oscCtx.moveTo(x, y);
+        else oscCtx.lineTo(x, y);
+        x += sliceWidth;
+      }
+      oscCtx.lineTo(width, height / 2);
+      oscCtx.stroke();
+    }
+
+    // ------------------------------------------------------------------
+    // Event Listeners & UI Controls
+    // ------------------------------------------------------------------
+    toggleEngineBtn.addEventListener('click', () => {
+      if (isEngineActive) stopAudioEngine();
+      else initAudioEngine();
+    });
+
+    // Audio Source Selectors
+    document.querySelectorAll('.src-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.src-btn').forEach(b => {
+          b.className = 'src-btn py-2 px-2 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-400 font-medium text-center';
+        });
+        e.target.className = 'src-btn py-2 px-2 rounded-lg bg-indigo-600/30 border border-indigo-500/50 text-indigo-200 font-medium text-center';
+
+        const srcType = e.target.id === 'srcSynth' ? 'synth' : e.target.id === 'srcMic' ? 'mic' : 'sys';
+        document.getElementById('synthControlsBlock').style.display = srcType === 'synth' ? 'flex' : 'none';
+        activateSource(srcType);
+      });
+    });
+
+    // Synth Preset Selectors
+    document.querySelectorAll('.synth-preset-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.synth-preset-btn').forEach(b => {
+          b.className = 'synth-preset-btn py-1.5 px-2 rounded bg-slate-900 text-slate-400 border border-slate-800';
+        });
+        e.target.className = 'synth-preset-btn py-1.5 px-2 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30';
+        const preset = e.target.dataset.synth;
+        document.getElementById('synthPatternLabel').innerText = e.target.innerText;
+        startSynthSequence(preset);
+      });
+    });
+
+    // View Mode Switcher
+    document.querySelectorAll('.view-mode-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const targetBtn = e.target.closest('.view-mode-btn');
+        document.querySelectorAll('.view-mode-btn').forEach(b => {
+          b.className = 'view-mode-btn py-2 px-3 rounded-lg border border-slate-800 bg-slate-900/60 text-slate-400 font-medium flex items-center justify-between';
+        });
+        targetBtn.className = 'view-mode-btn py-2 px-3 rounded-lg border border-indigo-500/80 bg-indigo-500/10 text-white font-medium flex items-center justify-between';
+
+        activeViewMode = targetBtn.dataset.mode;
+        
+        grid2DWrapper.classList.toggle('hidden', activeViewMode !== '2d_grid');
+        grid2DWrapper.classList.toggle('opacity-0', activeViewMode !== '2d_grid');
+
+        threeCanvasWrapper.classList.toggle('hidden', activeViewMode !== '3d_grid');
+        threeCanvasWrapper.classList.toggle('opacity-0', activeViewMode !== '3d_grid');
+
+        const isCanvas2D = activeViewMode === 'bars' || activeViewMode === 'radial';
+        canvas2DWrapper.classList.toggle('hidden', !isCanvas2D);
+        canvas2DWrapper.classList.toggle('opacity-0', !isCanvas2D);
+      });
+    });
+
+    // Theme Switcher
+    document.querySelectorAll('.theme-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const targetBtn = e.target.closest('.theme-btn');
+        document.querySelectorAll('.theme-btn').forEach(b => {
+          b.className = 'theme-btn py-2 px-3 rounded-lg border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-white text-xs font-semibold flex items-center justify-between';
+        });
+        targetBtn.className = 'theme-btn py-2 px-3 rounded-lg border border-indigo-500/80 bg-indigo-500/10 text-white text-xs font-semibold flex items-center justify-between';
+        activeTheme = targetBtn.dataset.theme;
+      });
+    });
+
+    // Slider Controls
+    gainSlider.addEventListener('input', (e) => {
+      gainFactor = parseFloat(e.target.value);
+      gainVal.innerText = `${gainFactor.toFixed(1)}x`;
+    });
+    smoothSlider.addEventListener('input', (e) => {
+      smoothingConstant = parseFloat(e.target.value);
+      smoothVal.innerText = smoothingConstant.toFixed(2);
+      if (analyser) analyser.smoothingTimeConstant = smoothingConstant;
+    });
+    decaySlider.addEventListener('input', (e) => {
+      decaySpeed = parseInt(e.target.value);
+      const labels = ['Slowest', 'Slow', 'Medium', 'Fast', 'Instant'];
+      decayVal.innerText = labels[decaySpeed - 1];
+    });
+
+    // Handle Window Resize for 3D & 2D Canvas
+    window.addEventListener('resize', () => {
+      const container = document.getElementById('threeContainer');
+      if (camera && renderer && container) {
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+      }
+    });
+  </script>
+</body>
+</html>
