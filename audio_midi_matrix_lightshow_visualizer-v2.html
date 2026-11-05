@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>64-Pad Audio MIDI Spectrum Visualizer</title>
+  <!-- Tailwind CSS for sleek UI -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Plus+Jakarta+Sans:wght@400;500;700&display=swap');
+    
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #0b0f17;
+      color: #e2e8f0;
+    }
+    
+    .font-mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Glow effects */
+    .glow-box {
+      box-shadow: 0 0 25px -5px rgba(59, 130, 246, 0.15);
+    }
+    
+    .pad-glow {
+      transition: background-color 0.05s ease, box-shadow 0.05s ease;
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between overflow-x-hidden">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800/80 bg-slate-900/60 backdrop-blur-md sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="p-2 bg-indigo-600/20 rounded-xl border border-indigo-500/30 text-indigo-400">
+          <i data-lucide="grid" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <h1 class="font-extrabold text-lg text-white tracking-tight flex items-center gap-2">
+            GRID PULSE <span class="text-xs font-mono font-normal px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">64-PAD MIDI BRIDGER</span>
+          </h1>
+          <p class="text-xs text-slate-400">Plug & Play Spectrum Lightshow Controller for Launchpad & Akai Fire</p>
+        </div>
+      </div>
+      
+      <!-- Audio & MIDI Status Indicators -->
+      <div class="flex items-center gap-3">
+        <div id="audioStatus" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700 text-xs font-mono text-slate-400">
+          <span class="w-2 h-2 rounded-full bg-slate-500 animate-pulse"></span> Audio: Idle
+        </div>
+        <div id="midiStatus" class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700 text-xs font-mono text-slate-400">
+          <span class="w-2 h-2 rounded-full bg-slate-500"></span> MIDI: Scanning...
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="max-w-7xl mx-auto px-4 py-6 w-full flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+    <!-- Left Controls Panel (5 Columns) -->
+    <section class="lg:col-span-5 flex flex-col gap-5">
+      
+      <!-- Audio Source & Activation -->
+      <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 glow-box">
+        <h2 class="text-sm font-semibold text-slate-200 mb-4 flex items-center gap-2">
+          <i data-lucide="mic" class="w-4 h-4 text-indigo-400"></i> Audio Stream Engine
+        </h2>
+        
+        <div class="flex flex-col gap-3">
+          <button id="startAudioBtn" class="w-full py-3 px-4 rounded-xl font-semibold text-sm bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/25 transition flex items-center justify-center gap-2">
+            <i data-lucide="power" class="w-4 h-4"></i> Start Audio Capture
+          </button>
+
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <button id="sourceMicBtn" class="py-2 px-3 rounded-lg bg-indigo-900/40 border border-indigo-500/50 text-indigo-200 font-medium text-center">
+              Microphone Input
+            </button>
+            <button id="sourceSysBtn" class="py-2 px-3 rounded-lg bg-slate-800/80 border border-slate-700 hover:border-slate-600 text-slate-400 font-medium text-center">
+              Display / Tab Audio
+            </button>
+          </div>
+          <p class="text-[11px] text-slate-500">Tip: Select "Display/Tab Audio" to capture YouTube, Spotify, or DAW playback directly.</p>
+        </div>
+      </div>
+
+      <!-- Signal Processing & Scaling Controls -->
+      <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 glow-box flex flex-col gap-4">
+        <h2 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+          <i data-lucide="sliders" class="w-4 h-4 text-indigo-400"></i> Spectrum Dynamics & Processing
+        </h2>
+
+        <!-- Sensitivity / Gain -->
+        <div>
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-slate-400">Gain Sensitivity</span>
+            <span id="gainVal" class="font-mono text-indigo-400">2.0x</span>
+          </div>
+          <input type="range" id="gainSlider" min="0.5" max="5" step="0.1" value="2.0" class="w-full accent-indigo-500 bg-slate-800 rounded-lg cursor-pointer h-2">
+        </div>
+
+        <!-- Smoothing FFT -->
+        <div>
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-slate-400">FFT Response Smoothing</span>
+            <span id="smoothVal" class="font-mono text-indigo-400">0.75</span>
+          </div>
+          <input type="range" id="smoothSlider" min="0.1" max="0.95" step="0.05" value="0.75" class="w-full accent-indigo-500 bg-slate-800 rounded-lg cursor-pointer h-2">
+        </div>
+
+        <!-- Dynamic Peak Decay -->
+        <div>
+          <div class="flex justify-between text-xs mb-1">
+            <span class="text-slate-400">Peak Fall Decay Speed</span>
+            <span id="decayVal" class="font-mono text-indigo-400">Medium</span>
+          </div>
+          <input type="range" id="decaySlider" min="1" max="5" step="1" value="3" class="w-full accent-indigo-500 bg-slate-800 rounded-lg cursor-pointer h-2">
+        </div>
+
+        <!-- Color Themes Selector -->
+        <div>
+          <label class="block text-xs text-slate-400 mb-2">Pad Thermal Gradient Theme</label>
+          <div class="grid grid-cols-2 gap-2">
+            <button data-theme="thermal" class="theme-btn py-2 px-3 rounded-lg border border-indigo-500/80 bg-indigo-500/10 text-white text-xs font-semibold flex items-center justify-between">
+              Thermal (Green-Hot) <span class="w-3 h-3 rounded-full bg-gradient-to-r from-emerald-400 via-amber-400 to-red-500"></span>
+            </button>
+            <button data-theme="vaporwave" class="theme-btn py-2 px-3 rounded-lg border border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white text-xs font-semibold flex items-center justify-between">
+              Vaporwave <span class="w-3 h-3 rounded-full bg-gradient-to-r from-cyan-400 via-pink-400 to-purple-600"></span>
+            </button>
+            <button data-theme="cyberpunk" class="theme-btn py-2 px-3 rounded-lg border border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white text-xs font-semibold flex items-center justify-between">
+              Cyberpunk <span class="w-3 h-3 rounded-full bg-gradient-to-r from-yellow-400 via-orange-500 to-pink-600"></span>
+            </button>
+            <button data-theme="matrix" class="theme-btn py-2 px-3 rounded-lg border border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white text-xs font-semibold flex items-center justify-between">
+              Matrix Cyber <span class="w-3 h-3 rounded-full bg-gradient-to-r from-emerald-600 via-emerald-400 to-lime-200"></span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Hardware Profile & MIDI Mapping -->
+      <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 glow-box flex flex-col gap-4">
+        <h2 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+          <i data-lucide="cpu" class="w-4 h-4 text-indigo-400"></i> Controller Output Profile
+        </h2>
+
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Target Controller Profile</label>
+          <select id="deviceProfile" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500">
+            <option value="akai_fire">Akai Fire (Native RGB SysEx 4x16 Matrix)</option>
+            <option value="launchpad_mk2">Novation Launchpad MK2 / Pro / X (Note 11-88 Grid)</option>
+            <option value="launchpad_legacy">Novation Launchpad Classic / S / Mini (0-127 Index)</option>
+            <option value="generic">Generic 64 Grid (Chromatics C-1 to D#4 / Note 36-99)</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Connected USB MIDI Out Device</label>
+          <select id="midiOutputSelect" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-indigo-500">
+            <option value="">Scanning for MIDI hardware...</option>
+          </select>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Right Visualization Canvas & Real-time Grid Monitor (7 Columns) -->
+    <section class="lg:col-span-7 flex flex-col gap-5">
+
+      <!-- Live Virtual Controller Pad Matrix -->
+      <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 glow-box flex flex-col items-center">
+        
+        <div class="w-full flex justify-between items-center mb-4">
+          <div class="flex items-center gap-2">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <h3 class="text-sm font-semibold text-slate-200">64-Pad Matrix Live Mirror</h3>
+          </div>
+          <span id="fpsCounter" class="text-xs font-mono text-slate-500">FPS: 60</span>
+        </div>
+
+        <!-- 8x8 Hardware Grid Simulation -->
+        <div class="p-4 bg-slate-950 rounded-2xl border border-slate-800/80 shadow-2xl relative w-full max-w-[460px] aspect-square flex flex-col justify-between">
+          <div id="gridMatrix" class="grid grid-cols-8 gap-2.5 w-full h-full">
+            <!-- 64 Pads dynamically generated via JavaScript -->
+          </div>
+        </div>
+
+        <!-- Frequency Bin Labels -->
+        <div class="grid grid-cols-8 gap-2.5 w-full max-w-[460px] mt-3 text-center text-[10px] font-mono text-slate-500">
+          <div>SUB</div>
+          <div>BASS</div>
+          <div>LOW</div>
+          <div>MID</div>
+          <div>HMID</div>
+          <div>PRES</div>
+          <div>HIGH</div>
+          <div>AIR</div>
+        </div>
+
+      </div>
+
+      <!-- Frequency Waveform Canvas -->
+      <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 glow-box">
+        <h3 class="text-xs font-semibold text-slate-300 mb-3 flex items-center gap-2">
+          <i data-lucide="activity" class="w-4 h-4 text-indigo-400"></i> Oscilloscope & FFT Raw Waveform
+        </h3>
+        <div class="w-full h-24 bg-slate-950 rounded-xl border border-slate-800/80 overflow-hidden relative">
+          <canvas id="waveformCanvas" class="w-full h-full"></canvas>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-800/80 bg-slate-950 py-3">
+    <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center text-xs text-slate-500 gap-2">
+      <p>Web Audio API & Web MIDI Hardware Bridge Daemon</p>
+      <p class="font-mono text-[11px]">Supports Novation Launchpad X/MK2/Mini • Akai Fire • Custom MIDI Grids</p>
+    </div>
+  </footer>
+
+  <!-- Application Scripting Logic -->
+  <script>
+    // Initialize Lucide Icons
+    lucide.createIcons();
+
+    // Core State Variables
+    let audioCtx = null;
+    let analyser = null;
+    let audioSource = null;
+    let mediaStream = null;
+    let midiAccess = null;
+    let selectedMidiOutput = null;
+
+    let isAudioActive = false;
+    let captureType = 'mic'; // 'mic' or 'system'
+
+    // DSP / Spectrum Settings
+    let gainFactor = 2.0;
+    let smoothing = 0.75;
+    let decaySpeed = 3;
+    let currentTheme = 'thermal';
+
+    // 8x8 Grid Heights and Peak Tracking
+    const gridHeights = new Array(8).fill(0);
+    const gridPeaks = new Array(8).fill(0);
+
+    // Color Gradients Palettes (RGB Values for row levels 0 to 7)
+    const THEMES = {
+      thermal: [
+        { r: 16, g: 185, b: 129 }, // Green (Low)
+        { r: 34, g: 197, b: 94 },
+        { r: 132, g: 204, b: 22 },
+        { r: 234, g: 179, b: 8 },  // Yellow
+        { r: 249, g: 115, b: 22 }, // Orange
+        { r: 239, g: 68, b: 68 },  // Red
+        { r: 220, g: 38, b: 38 },
+        { r: 255, g: 0, b: 80 }    // Hot Peak Flash
+      ],
+      vaporwave: [
+        { r: 6, g: 182, b: 212 },
+        { r: 59, g: 130, b: 246 },
+        { r: 99, g: 102, b: 241 },
+        { r: 139, g: 92, b: 246 },
+        { r: 168, g: 85, b: 247 },
+        { r: 217, g: 70, b: 239 },
+        { r: 236, g: 72, b: 153 },
+        { r: 244, g: 114, b: 182 }
+      ],
+      cyberpunk: [
+        { r: 250, g: 204, b: 21 },
+        { r: 245, g: 158, b: 11 },
+        { r: 249, g: 115, b: 22 },
+        { r: 239, g: 68, b: 68 },
+        { r: 217, g: 70, b: 239 },
+        { r: 225, g: 29, b: 72 },
+        { r: 255, g: 0, b: 128 },
+        { r: 255, g: 255, b: 0 }
+      ],
+      matrix: [
+        { r: 5, g: 46, b: 22 },
+        { r: 20, g: 83, b: 45 },
+        { r: 22, g: 101, b: 52 },
+        { r: 34, g: 197, b: 94 },
+        { r: 74, g: 222, b: 128 },
+        { r: 134, g: 239, b: 172 },
+        { r: 187, g: 247, b: 208 },
+        { r: 255, g: 255, b: 255 }
+      ]
+    };
+
+    // DOM Element References
+    const startAudioBtn = document.getElementById('startAudioBtn');
+    const sourceMicBtn = document.getElementById('sourceMicBtn');
+    const sourceSysBtn = document.getElementById('sourceSysBtn');
+    const audioStatus = document.getElementById('audioStatus');
+    const midiStatus = document.getElementById('midiStatus');
+    const gainSlider = document.getElementById('gainSlider');
+    const gainVal = document.getElementById('gainVal');
+    const smoothSlider = document.getElementById('smoothSlider');
+    const smoothVal = document.getElementById('smoothVal');
+    const decaySlider = document.getElementById('decaySlider');
+    const decayVal = document.getElementById('decayVal');
+    const midiOutputSelect = document.getElementById('midiOutputSelect');
+    const deviceProfile = document.getElementById('deviceProfile');
+    const gridMatrixEl = document.getElementById('gridMatrix');
+    const waveformCanvas = document.getElementById('waveformCanvas');
+    const canvasCtx = waveformCanvas.getContext('2d');
+    const fpsCounter = document.getElementById('fpsCounter');
+
+    // Build the 8x8 Virtual Grid Simulator UI (Pads numbered from bottom row 0 to top row 7)
+    const padElements = [];
+    function initVirtualGrid() {
+      gridMatrixEl.innerHTML = '';
+      for (let r = 7; r >= 0; r--) {
+        for (let c = 0; c < 8; c++) {
+          const pad = document.createElement('div');
+          pad.className = 'w-full h-full rounded-lg bg-slate-900 border border-slate-800 pad-glow flex items-center justify-center cursor-pointer transition-all';
+          pad.dataset.row = r;
+          pad.dataset.col = c;
+          gridMatrixEl.appendChild(pad);
+          padElements.push({ element: pad, row: r, col: c });
+        }
+      }
+    }
+    initVirtualGrid();
+
+    // Web Audio Setup
+    async function initAudio() {
+      try {
+        if (audioCtx) {
+          await audioCtx.close();
+        }
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 512;
+        analyser.smoothingTimeConstant = smoothing;
+
+        if (captureType === 'mic') {
+          mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        } else {
+          mediaStream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: true });
+        }
+
+        audioSource = audioCtx.createMediaStreamSource(mediaStream);
+        audioSource.connect(analyser);
+
+        isAudioActive = true;
+        audioStatus.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Audio: Active (${captureType.toUpperCase()})`;
+        audioStatus.className = 'flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-950/40 border border-emerald-500/40 text-xs font-mono text-emerald-300';
+        startAudioBtn.innerHTML = `<i data-lucide="square" class="w-4 h-4"></i> Stop Audio Stream`;
+        startAudioBtn.className = "w-full py-3 px-4 rounded-xl font-semibold text-sm bg-rose-600 hover:bg-rose-500 text-white shadow-lg transition flex items-center justify-center gap-2";
+        lucide.createIcons();
+
+        renderLoop();
+      } catch (err) {
+        console.error("Audio Initialization Error: ", err);
+        alert("Failed to capture audio stream. Please grant microphone or audio sharing permissions.");
+      }
+    }
+
+    function stopAudio() {
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(track => track.stop());
+      }
+      isAudioActive = false;
+      audioStatus.innerHTML = `<span class="w-2 h-2 rounded-full bg-slate-500"></span> Audio: Stopped`;
+      audioStatus.className = 'flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700 text-xs font-mono text-slate-400';
+      startAudioBtn.innerHTML = `<i data-lucide="power" class="w-4 h-4"></i> Start Audio Capture`;
+      startAudioBtn.className = "w-full py-3 px-4 rounded-xl font-semibold text-sm bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg transition flex items-center justify-center gap-2";
+      lucide.createIcons();
+      clearGrid();
+    }
+
+    // Web MIDI Integration
+    async function initMIDI() {
+      if (navigator.requestMIDIAccess) {
+        try {
+          midiAccess = await navigator.requestMIDIAccess({ sysex: true });
+          updateMidiDevices();
+          midiAccess.onstatechange = updateMidiDevices;
+        } catch (err) {
+          console.warn("MIDI Access Denied or SysEx unsupported:", err);
+          midiStatus.innerText = "MIDI: Access Denied";
+        }
+      } else {
+        midiStatus.innerText = "MIDI: Unsupported Browser";
+      }
+    }
+
+    function updateMidiDevices() {
+      midiOutputSelect.innerHTML = '';
+      const outputs = Array.from(midiAccess.outputs.values());
+
+      if (outputs.length === 0) {
+        midiOutputSelect.innerHTML = '<option value="">No MIDI Output Devices Found</option>';
+        midiStatus.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500"></span> MIDI: No Hardware`;
+        selectedMidiOutput = null;
+        return;
+      }
+
+      let defaultSelected = false;
+
+      outputs.forEach(output => {
+        const opt = document.createElement('option');
+        opt.value = output.id;
+        opt.textContent = `${output.name} (${output.manufacturer || 'Generic'})`;
+        midiOutputSelect.appendChild(opt);
+
+        // Auto-select Akai Fire if detected
+        if (output.name.toLowerCase().includes('fire')) {
+          midiOutputSelect.value = output.id;
+          selectedMidiOutput = output;
+          deviceProfile.value = 'akai_fire';
+          defaultSelected = true;
+        }
+      });
+
+      if (!defaultSelected) {
+        selectedMidiOutput = outputs[0];
+      }
+
+      midiStatus.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500"></span> MIDI: Connected (${selectedMidiOutput.name})`;
+      midiStatus.className = 'flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-950/40 border border-emerald-500/40 text-xs font-mono text-emerald-300';
+
+      sendLaunchpadProgrammerMode(selectedMidiOutput);
+    }
+
+    function sendLaunchpadProgrammerMode(output) {
+      if (!output) return;
+      const devName = output.name.toLowerCase();
+      if (devName.includes('launchpad')) {
+        try {
+          output.send([240, 0, 32, 41, 2, 12, 14, 1, 247]); // Launchpad X
+          output.send([240, 0, 32, 41, 2, 24, 44, 0, 247]); // Launchpad MK2
+        } catch (e) {
+          console.log("Standard MIDI SysEx sent.");
+        }
+      }
+    }
+
+    midiOutputSelect.addEventListener('change', (e) => {
+      if (midiAccess) {
+        selectedMidiOutput = midiAccess.outputs.get(e.target.value);
+        if (selectedMidiOutput) sendLaunchpadProgrammerMode(selectedMidiOutput);
+      }
+    });
+
+    // Hardware Note Mapping Algorithm (Standard Launchpads / Chromatic Grids)
+    function getMidiNoteForPad(row, col, profile) {
+      switch (profile) {
+        case 'launchpad_mk2':
+          return (row + 1) * 10 + (col + 1);
+        case 'launchpad_legacy':
+          return (row * 16) + col;
+        case 'generic':
+        default:
+          return 36 + (row * 8) + col;
+      }
+    }
+
+    // Direct Akai Fire SysEx Frame Generator
+    // Maps 8x8 virtual spectrum to 4x16 physical Akai Fire pad matrix
+    function sendAkaiFireGridSysEx(output, padStates, palette) {
+      if (!output) return;
+
+      // Header: F0 47 7F 43 0E [Length_Hi] [Length_Lo]
+      // Followed by 64 RGB triplets (4 bytes per pad: Pad_Index, R, G, B)
+      const sysexPayload = [0xF0, 0x47, 0x7F, 0x43, 0x0E, 0x01, 0x00];
+
+      // Akai Fire physical pad row indices: Row 0 (top) to Row 3 (bottom)
+      // We map the 8 frequency columns across the 16 physical pads (2 columns per bin)
+      for (let fireRow = 0; fireRow < 4; fireRow++) {
+        for (let fireCol = 0; fireCol < 16; fireCol++) {
+          const padIdx = (fireRow * 16) + fireCol;
+          
+          // Map Fire 4 rows to virtual grid vertical height (0 to 7)
+          const virtRow = (3 - fireRow) * 2; 
+          const virtCol = Math.floor(fireCol / 2); // Map 16 columns to 8 frequency bins
+
+          const height = padStates.heights[virtCol];
+          const peak = Math.floor(padStates.peaks[virtCol]);
+
+          let r = 0, g = 0, b = 0;
+
+          if (virtRow < height) {
+            const color = palette[virtRow];
+            // Scale 0-255 RGB to 7-bit MIDI range (0-127)
+            r = Math.floor(color.r / 2);
+            g = Math.floor(color.g / 2);
+            b = Math.floor(color.b / 2);
+          } else if (virtRow === peak && peak > 0) {
+            const color = palette[7];
+            r = Math.floor(color.r / 2);
+            g = Math.floor(color.g / 2);
+            b = Math.floor(color.b / 2);
+          }
+
+          sysexPayload.push(padIdx, r, g, b);
+        }
+      }
+
+      sysexPayload.push(0xF7); // SysEx End Flag
+
+      try {
+        output.send(sysexPayload);
+      } catch (err) {
+        console.error("Akai Fire SysEx Transmission Error:", err);
+      }
+    }
+
+    // Main DSP FFT Analysis & Lightshow Rendering Loop
+    let lastFrameTime = performance.now();
+    function renderLoop() {
+      if (!isAudioActive) return;
+
+      const now = performance.now();
+      const delta = now - lastFrameTime;
+      lastFrameTime = now;
+      fpsCounter.innerText = `FPS: ${Math.round(1000 / delta)}`;
+
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      const timeDataArray = new Uint8Array(bufferLength);
+      analyser.getByteFrequencyData(dataArray);
+      analyser.getByteTimeDomainData(timeDataArray);
+
+      // Render oscillogram canvas
+      renderWaveform(timeDataArray);
+
+      // Divide Frequency Spectrum into 8 logarithmic columns
+      const binSize = Math.floor(bufferLength / 16);
+      
+      for (let col = 0; col < 8; col++) {
+        let sum = 0;
+        const startBin = col * binSize;
+        const endBin = startBin + binSize;
+        
+        for (let i = startBin; i < endBin; i++) {
+          sum += dataArray[i];
+        }
+
+        const avg = (sum / binSize) / 255.0; // Normalized 0.0 - 1.0
+        const scaledHeight = Math.min(8, Math.max(0, Math.floor(avg * 8 * gainFactor)));
+
+        // Peak decay physics logic
+        if (scaledHeight >= gridPeaks[col]) {
+          gridPeaks[col] = scaledHeight;
+        } else {
+          gridPeaks[col] = Math.max(0, gridPeaks[col] - (0.1 * decaySpeed));
+        }
+
+        gridHeights[col] = scaledHeight;
+      }
+
+      const palette = THEMES[currentTheme];
+      const targetProfile = deviceProfile.value;
+
+      // Update Virtual UI Mirror Matrix
+      padElements.forEach(pad => {
+        const r = pad.row;
+        const c = pad.col;
+        const height = gridHeights[c];
+        const peakHeight = Math.floor(gridPeaks[c]);
+
+        let color = { r: 15, g: 23, b: 42 }; // Off slate color
+        let isLit = false;
+
+        if (r < height) {
+          color = palette[r];
+          isLit = true;
+        } else if (r === peakHeight && peakHeight > 0) {
+          color = palette[7];
+          isLit = true;
+        }
+
+        if (isLit) {
+          pad.element.style.backgroundColor = `rgb(${color.r}, ${color.g}, ${color.b})`;
+          pad.element.style.boxShadow = `0 0 12px rgba(${color.r}, ${color.g}, ${color.b}, 0.6)`;
+          pad.element.style.borderColor = `rgba(${color.r}, ${color.g}, ${color.b}, 0.9)`;
+        } else {
+          pad.element.style.backgroundColor = '#0f172a';
+          pad.element.style.boxShadow = 'none';
+          pad.element.style.borderColor = '#1e293b';
+        }
+
+        // Send Standard MIDI Note updates for Launchpads & Generic Controllers
+        if (selectedMidiOutput && targetProfile !== 'akai_fire') {
+          const noteNumber = getMidiNoteForPad(r, c, targetProfile);
+          if (isLit) {
+            const velocityColor = mapRGBToMidiVelocity(color.r, color.g, color.b);
+            selectedMidiOutput.send([0x90, noteNumber, velocityColor]);
+          } else {
+            selectedMidiOutput.send([0x80, noteNumber, 0]);
+          }
+        }
+      });
+
+      // Transmit Native SysEx Packet if Akai Fire is selected
+      if (selectedMidiOutput && targetProfile === 'akai_fire') {
+        sendAkaiFireGridSysEx(selectedMidiOutput, { heights: gridHeights, peaks: gridPeaks }, palette);
+      }
+
+      requestAnimationFrame(renderLoop);
+    }
+
+    // Map 24-bit RGB values to Novation / Standard 127 Velocity RGB Palette Indices
+    function mapRGBToMidiVelocity(r, g, b) {
+      if (r > 200 && g < 50 && b < 100) return 5;   // Red
+      if (r > 200 && g > 150 && b < 50) return 9;   // Orange/Yellow
+      if (r < 100 && g > 180 && b < 100) return 21;  // Green
+      if (r < 50 && g > 180 && b > 180) return 37;  // Cyan
+      if (r > 150 && g < 50 && b > 200) return 53;  // Magenta
+      return 3; // Dim White / Default fallback
+    }
+
+    // Render Raw Oscilloscope Spectrum Line
+    function renderWaveform(dataArray) {
+      const width = waveformCanvas.width = waveformCanvas.clientWidth;
+      const height = waveformCanvas.height = waveformCanvas.clientHeight;
+
+      canvasCtx.fillStyle = '#020617';
+      canvasCtx.fillRect(0, 0, width, height);
+
+      canvasCtx.lineWidth = 2;
+      canvasCtx.strokeStyle = '#6366f1';
+      canvasCtx.beginPath();
+
+      const sliceWidth = width * 1.0 / dataArray.length;
+      let x = 0;
+
+      for (let i = 0; i < dataArray.length; i++) {
+        const v = dataArray[i] / 128.0;
+        const y = v * height / 2;
+
+        if (i === 0) {
+          canvasCtx.moveTo(x, y);
+        } else {
+          canvasCtx.lineTo(x, y);
+        }
+        x += sliceWidth;
+      }
+
+      canvasCtx.lineTo(width, height / 2);
+      canvasCtx.stroke();
+    }
+
+    function clearGrid() {
+      padElements.forEach(pad => {
+        pad.element.style.backgroundColor = '#0f172a';
+        pad.element.style.boxShadow = 'none';
+        pad.element.style.borderColor = '#1e293b';
+      });
+      canvasCtx.fillStyle = '#020617';
+      canvasCtx.fillRect(0, 0, waveformCanvas.width, waveformCanvas.height);
+
+      if (selectedMidiOutput) {
+        if (deviceProfile.value === 'akai_fire') {
+          // Send all pads off via SysEx frame
+          sendAkaiFireGridSysEx(selectedMidiOutput, { heights: [0,0,0,0,0,0,0,0], peaks: [0,0,0,0,0,0,0,0] }, THEMES.thermal);
+        } else {
+          for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+              const note = getMidiNoteForPad(r, c, deviceProfile.value);
+              selectedMidiOutput.send([0x80, note, 0]);
+            }
+          }
+        }
+      }
+    }
+
+    // Event Listeners Setup
+    startAudioBtn.addEventListener('click', () => {
+      if (isAudioActive) {
+        stopAudio();
+      } else {
+        initAudio();
+      }
+    });
+
+    sourceMicBtn.addEventListener('click', () => {
+      captureType = 'mic';
+      sourceMicBtn.className = "py-2 px-3 rounded-lg bg-indigo-900/40 border border-indigo-500/50 text-indigo-200 font-medium text-center";
+      sourceSysBtn.className = "py-2 px-3 rounded-lg bg-slate-800/80 border border-slate-700 hover:border-slate-600 text-slate-400 font-medium text-center";
+      if (isAudioActive) initAudio();
+    });
+
+    sourceSysBtn.addEventListener('click', () => {
+      captureType = 'system';
+      sourceSysBtn.className = "py-2 px-3 rounded-lg bg-indigo-900/40 border border-indigo-500/50 text-indigo-200 font-medium text-center";
+      sourceMicBtn.className = "py-2 px-3 rounded-lg bg-slate-800/80 border border-slate-700 hover:border-slate-600 text-slate-400 font-medium text-center";
+      if (isAudioActive) initAudio();
+    });
+
+    gainSlider.addEventListener('input', (e) => {
+      gainFactor = parseFloat(e.target.value);
+      gainVal.innerText = `${gainFactor.toFixed(1)}x`;
+    });
+
+    smoothSlider.addEventListener('input', (e) => {
+      smoothing = parseFloat(e.target.value);
+      smoothVal.innerText = smoothing.toFixed(2);
+      if (analyser) analyser.smoothingTimeConstant = smoothing;
+    });
+
+    decaySlider.addEventListener('input', (e) => {
+      decaySpeed = parseInt(e.target.value);
+      const labels = ['Slowest', 'Slow', 'Medium', 'Fast', 'Instant'];
+      decayVal.innerText = labels[decaySpeed - 1];
+    });
+
+    // Theme Picker Buttons
+    document.querySelectorAll('.theme-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.theme-btn').forEach(b => {
+          b.className = "theme-btn py-2 px-3 rounded-lg border border-slate-800 bg-slate-800/60 text-slate-400 hover:text-white text-xs font-semibold flex items-center justify-between";
+        });
+        btn.className = "theme-btn py-2 px-3 rounded-lg border border-indigo-500/80 bg-indigo-500/10 text-white text-xs font-semibold flex items-center justify-between";
+        currentTheme = btn.dataset.theme;
+      });
+    });
+
+    // Initialize Web MIDI on page launch
+    window.addEventListener('DOMContentLoaded', () => {
+      initMIDI();
+    });
+  </script>
+</body>
+</html>
